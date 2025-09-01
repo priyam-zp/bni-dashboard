@@ -260,11 +260,11 @@ export function getIndividualLeaderboard(teams: TeamData, category: string): Ind
 /**
  * 🔍 Utility function to find which team a member belongs to
  */
-export function findMemberInTeams(teams: TeamData, memberName: string) {
+export function findMemberInTeams(teams: TeamData, memberName: string): { team: string; member: string } | null {
   for (const teamKey in teams) {
     const team = teams[teamKey];
     if (team.members.includes(memberName)) {
-      return { teamKey, team };
+      return { team: teamKey, member: memberName };
     }
   }
   return null; // not found
