@@ -87,11 +87,13 @@ export default function Home() {
               onStatusUpdate={showUploadStatus}
             />
             {uploadStatus.message && (
-              <div className={`mt-4 p-4 rounded-lg font-semibold ${
-                uploadStatus.type === 'success' 
-                  ? 'bg-green-100 text-green-800 border border-green-200' 
-                  : 'bg-red-100 text-red-800 border border-red-200'
-              }`}>
+              <div
+                className={`mt-4 p-4 rounded-lg font-semibold ${
+                  uploadStatus.type === 'success'
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}
+              >
                 {uploadStatus.message}
               </div>
             )}
@@ -137,17 +139,11 @@ export default function Home() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === 'team' && (
-            <TeamLeaderboard teams={teams} />
-          )}
-          
-          {activeTab === 'individual' && (
-            <IndividualLeaderboard teams={teams} />
-          )}
-          
+          {activeTab === 'team' && <TeamLeaderboard teams={teams} />}
+          {activeTab === 'individual' && <IndividualLeaderboard teams={teams} />}
           {activeTab === 'latecomers' && (
-            <LatecomersManagement 
-              teams={teams} 
+            <LatecomersManagement
+              teams={teams}
               onDataUpdate={handleDataUpdate}
               onStatusUpdate={showUploadStatus}
             />
@@ -166,7 +162,7 @@ export default function Home() {
 
         {/* Zapform Banner */}
         <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-center py-4 font-semibold shadow-lg">
-          
+          <a
             href="https://zapform.com"
             target="_blank"
             rel="noopener noreferrer"
