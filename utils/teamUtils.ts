@@ -248,3 +248,24 @@ export function getIndividualLeaderboard(teams: TeamData, category: string): Ind
         team: team.name,
         teamColor: team.color,
         points: categoryValue,
+        count: categoryCount,
+        totalPoints: calculateTotalMemberPoints(memberData)
+      });
+    });
+  });
+
+  return leaderboard.sort((a, b) => b.points - a.points);
+}
+
+/**
+ * 🔍 Utility function to find which team a member belongs to
+ */
+export function findMemberInTeams(teams: TeamData, memberName: string) {
+  for (const teamKey in teams) {
+    const team = teams[teamKey];
+    if (team.members.includes(memberName)) {
+      return { teamKey, team };
+    }
+  }
+  return null; // not found
+}
