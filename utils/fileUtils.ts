@@ -31,7 +31,7 @@ export function validateFile(file: File): FileValidationResult {
   const warnings: string[] = [];
   
   // Check file size (10MB limit)
-  const maxSize = 10 * 1024 * 1024; // 10MB
+  const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
     errors.push('File size exceeds 10MB limit');
   }
@@ -50,7 +50,7 @@ export function validateFile(file: File): FileValidationResult {
     warnings.push('File name is very long and may cause issues');
   }
   
-  // Check for special characters in filename
+  // Check for special characters
   const specialChars = /[<>:"/\\|?*]/;
   if (specialChars.test(file.name)) {
     warnings.push('File name contains special characters that may cause issues');
@@ -85,10 +85,7 @@ export function parseCsvFile(file: File): Promise<FileProcessingResult> {
         
         const data = results.data as string[][];
         if (data.length === 0) {
-          resolve({
-            success: false,
-            error: 'CSV file is empty'
-          });
+          resolve({ success: false, error: 'CSV file is empty' });
           return;
         }
         
@@ -104,10 +101,7 @@ export function parseCsvFile(file: File): Promise<FileProcessingResult> {
         });
       },
       error: (error) => {
-        resolve({
-          success: false,
-          error: `Failed to parse CSV: ${error.message}`
-        });
+        resolve({ success: false, error: `Failed to parse CSV: ${error.message}` });
       }
     });
   });
@@ -126,23 +120,17 @@ export function parseExcelFile(file: File): Promise<FileProcessingResult> {
         const workbook = XLSX.read(data, { 
           type: 'binary',
           cellStyles: true,
-          cellFormulas: true,
+          cellFormula: true,
           cellDates: true
         });
         
-        // Use the first sheet
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) {
-          resolve({
-            success: false,
-            error: 'Excel file has no sheets'
-          });
+          resolve({ success: false, error: 'Excel file has no sheets' });
           return;
         }
         
         const worksheet = workbook.Sheets[sheetName];
-        
-        // Convert to array of arrays
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
           header: 1,
           raw: false,
@@ -150,10 +138,7 @@ export function parseExcelFile(file: File): Promise<FileProcessingResult> {
         }) as string[][];
         
         if (jsonData.length === 0) {
-          resolve({
-            success: false,
-            error: 'Excel sheet is empty'
-          });
+          resolve({ success: false, error: 'Excel sheet is empty' });
           return;
         }
         
@@ -177,10 +162,7 @@ export function parseExcelFile(file: File): Promise<FileProcessingResult> {
     };
     
     reader.onerror = () => {
-      resolve({
-        success: false,
-        error: 'Failed to read Excel file'
-      });
+      resolve({ success: false, error: 'Failed to read Excel file' });
     };
     
     reader.readAsBinaryString(file);
@@ -188,29 +170,21 @@ export function parseExcelFile(file: File): Promise<FileProcessingResult> {
 }
 
 /**
- * Process uploaded file (auto-detect type)
+ * Process uploaded file
  */
 export async function processUploadedFile(file: File): Promise<FileProcessingResult> {
-  // Validate file first
   const validation = validateFile(file);
   if (!validation.isValid) {
-    return {
-      success: false,
-      error: validation.errors.join(', ')
-    };
+    return { success: false, error: validation.errors.join(', ') };
   }
   
-  // Process based on file type
   try {
     if (validation.fileType === 'csv') {
       return await parseCsvFile(file);
     } else if (['xls', 'xlsx'].includes(validation.fileType)) {
       return await parseExcelFile(file);
     } else {
-      return {
-        success: false,
-        error: 'Unsupported file type'
-      };
+      return { success: false, error: 'Unsupported file type' };
     }
   } catch (error) {
     return {
@@ -221,20 +195,18 @@ export async function processUploadedFile(file: File): Promise<FileProcessingRes
 }
 
 /**
- * Format file size for display
+ * Format file size
  */
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
-  
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 /**
- * Generate sample CSV data for testing
+ * Generate sample CSV
  */
 export function generateSampleCsv(): string {
   const headers = ['Name', 'P', 'A', 'L', 'RGI', 'RGO', 'V', '1-2-1', 'TYFCB'];
@@ -246,10 +218,5 @@ export function generateSampleCsv(): string {
     ['Abhinav Gupta', '5', '0', '0', '3', '2', '2', '2', '1']
   ];
   
-  return [headers, ...sampleData]
-    .map(row => row.join(','))
-    .join('\n');
+  return [headers, ...sampleData].map(row => row.join(',')).join('\n');
 }
-
-/**
- * Clean
