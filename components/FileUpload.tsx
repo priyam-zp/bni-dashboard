@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Upload } from "lucide-react";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { TeamData } from "../utils/teamUtils";
-import { parseCSVData, parseExcelData, updateMemberFromRow } from "../utils/fileUtils";
+import { updateMemberFromRow } from "../utils/fileUtils";
 
 interface FileUploadProps {
   teams: TeamData;
@@ -9,81 +11,147 @@ interface FileUploadProps {
   onStatusUpdate: (message: string, type: "success" | "error") => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ teams, onDataUpdate, onStatusUpdate }) => {
-  const [loading, setLoading] = useState(false);
+export default function FileUpload({
+  teams,
+  onDataUpdate,
+  onStatusUpdate,
+}: FileUploadProps) {
+  const [fileName, setFileName] = useState<string>("");
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ Parse CSV using PapaParse
+  const parseCSV = (file: File) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        processRows(result.data as Record<string, string>[]);
+      },
+      error: () => {
+        onStatusUpdate("❌ Failed to parse CSV file", "error");
+      },
+    });
+  };
+
+  // ✅ Parse Excel using xlsx
+  const parseExcel = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const binary = event.target?.result;
+      if (!binary) return;
+
+      const workbook = XLSX.read(binary, { type: "binary", cellDates: true });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json<Record<string, string>>(firstSheet, {
+        defval: "",
+      });
+
+      processRows(data);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // ✅ Process rows and update team data
+  const processRows = (rows: Record<string, string>[]) => {
+    if (!rows.length) {
+      onStatusUpdate("⚠️ No data found in file", "error");
+      return;
+    }
+
+    const headers = Object.keys(rows[0]);
+    const updatedTeams: TeamData = { ...teams };
+
+    rows.forEach((row) => {
+      const memberName =
+        row["Member Name"] ||
+        row["Participant Name"] ||
+        row["Name"] ||
+        row["member"] ||
+        "";
+
+      if (!memberName.trim()) return;
+
+      // Loop through teams and update if member exists
+      let found = false;
+      Object.keys(updatedTeams).forEach((teamKey) => {
+        if (updatedTeams[teamKey].data[memberName]) {
+          updateMemberFromRow(updatedTeams[teamKey].data[memberName], row, headers);
+          found = true;
+        }
+      });
+
+      if (!found) {
+        console.warn(`⚠️ Member not found in teams: ${memberName}`);
+      }
+    });
+
+    onDataUpdate(updatedTeams);
+    onStatusUpdate("✅ File processed successfully", "success");
+  };
+
+  // ✅ Handle file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setLoading(true);
+    setFileName(file.name);
 
-    try {
-      let updatedTeams: TeamData = { ...teams };
-
-      if (file.name.endsWith(".csv")) {
-        updatedTeams = await parseCSVData(file, updatedTeams);
-      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-        updatedTeams = await parseExcelData(file, updatedTeams);
-      } else {
-        throw new Error("Unsupported file format. Please upload a CSV or Excel file.");
-      }
-
-      onDataUpdate(updatedTeams);
-      onStatusUpdate("✅ Data uploaded and processed successfully!", "success");
-    } catch (error: any) {
-      console.error("File processing error:", error);
-      onStatusUpdate(`❌ Error processing file: ${error.message}`, "error");
-    } finally {
-      setLoading(false);
-      event.target.value = "";
+    if (file.type === "text/csv") {
+      parseCSV(file);
+    } else if (
+      file.type ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      file.type === "application/vnd.ms-excel" ||
+      file.name.endsWith(".xlsx") ||
+      file.name.endsWith(".xls")
+    ) {
+      parseExcel(file);
+    } else {
+      onStatusUpdate("❌ Unsupported file format", "error");
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* File input */}
-      <div className="flex flex-col items-center">
-        <label
-          htmlFor="file-upload"
-          className="cursor-pointer bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 transform hover:-translate-y-1 flex items-center space-x-2"
-        >
-          <Upload size={20} />
-          <span>{loading ? "Processing..." : "Upload CSV / Excel File"}</span>
-        </label>
+    <div className="p-6 border-2 border-dashed border-gray-300 rounded-xl text-center">
+      <label className="cursor-pointer flex flex-col items-center space-y-3">
+        <Upload className="h-10 w-10 text-red-500" />
+        <span className="text-lg font-semibold text-gray-700">
+          Upload PALMS Report
+        </span>
+        <span className="text-sm text-gray-500">
+          Supported: <strong>CSV, XLSX, XLS</strong>
+        </span>
         <input
-          id="file-upload"
           type="file"
           accept=".csv, .xlsx, .xls"
-          className="hidden"
           onChange={handleFileUpload}
-          disabled={loading}
+          className="hidden"
         />
-      </div>
+      </label>
 
-      {/* Supported formats */}
-      <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">📋 Supported File Formats</h3>
-        <ul className="text-gray-700 space-y-1 list-disc list-inside">
-          <li><strong>CSV</strong>: Comma-separated values with headers</li>
-          <li><strong>Excel</strong>: .xlsx and .xls files (first sheet will be processed)</li>
-          <li><strong>Required columns</strong>: Member Name / Participant Name</li>
-          <li><strong>Recognized data</strong>:  
-            <ul className="list-disc list-inside ml-6">
-              <li>P / Present</li>
-              <li>A / Absent</li>
-              <li>L / Late</li>
-              <li>RGI / RGO</li>
-              <li>Visitors</li>
-              <li>1-2-1 Meetings</li>
-              <li>TYFCB (Thank You for Closed Business)</li>
-              <li>Other PALMS metrics</li>
-            </ul>
+      {fileName && (
+        <p className="mt-3 text-sm text-gray-600">📂 {fileName} uploaded</p>
+      )}
+
+      {/* File format guide */}
+      <div className="mt-6 text-left text-sm bg-gray-50 p-4 rounded-lg">
+        <h3 className="font-semibold text-gray-800 mb-2">
+          📋 Supported File Formats
+        </h3>
+        <ul className="list-disc list-inside text-gray-600 space-y-1">
+          <li>CSV: Comma-separated values with headers</li>
+          <li>Excel: .xlsx and .xls files (first sheet will be processed)</li>
+          <li>
+            Required columns: <strong>Member name / Participant name</strong>
+          </li>
+          <li>
+            Recognized data:{" "}
+            <strong>
+              P / Present, A / Absent, L / Late, RGI / RGO, V / Visitors,
+              1-2-1, TYFCB
+            </strong>
           </li>
         </ul>
       </div>
     </div>
   );
-};
-
-export default FileUpload;
+}
