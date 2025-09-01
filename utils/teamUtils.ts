@@ -1,82 +1,68 @@
+// utils/teamUtils.ts
+
 export interface MemberData {
-  attendance: string[];
-  lateCount: number;
-  visitors: number;
-  oneToOnes: number;
-  tyfcb: number;
-  [key: string]: any; // allow extra PALMS metrics
+  name: string;
+  stats: { [key: string]: number };
+  points: number;
 }
 
 export interface Team {
   name: string;
-  data: { [memberName: string]: MemberData };
+  captain: string;
+  members: MemberData[];
+  totalPoints: number;
 }
 
 export interface TeamData {
-  [teamKey: string]: Team;
+  [key: string]: Team;
 }
 
-export const initializeTeams = (): TeamData => ({
-  team1: { name: "Team 1", data: {} },
-  team2: { name: "Team 2", data: {} },
-  team3: { name: "Team 3", data: {} },
-  team4: { name: "Team 4", data: {} },
-});
-
-export const findMemberInTeams = (
-  teams: TeamData,
-  memberName: string
-): { team: string; member: string } | null => {
-  for (const teamKey of Object.keys(teams)) {
-    const team = teams[teamKey];
-    if (Object.keys(team.data).includes(memberName)) {
-      return { team: teamKey, member: memberName };
-    }
-  }
-  return null;
-};
-
-export const getTeamLeaderboard = (teams: TeamData) => {
-  return Object.keys(teams).map((teamKey) => {
-    const team = teams[teamKey];
-    const totalPoints = Object.values(team.data).reduce((sum, member) => {
-      return (
-        sum +
-        member.attendance.length * 1 +
-        member.lateCount * -0.5 +
-        member.visitors * 5 +
-        member.oneToOnes * 2 +
-        member.tyfcb * 10
-      );
-    }, 0);
-
-    return {
-      team: team.name,
-      points: totalPoints,
-    };
-  });
-};
-
-export const getIndividualLeaderboard = (teams: TeamData) => {
-  const leaderboard: { member: string; team: string; points: number }[] = [];
-
-  for (const teamKey of Object.keys(teams)) {
-    const team = teams[teamKey];
-    for (const [memberName, member] of Object.entries(team.data)) {
-      const points =
-        member.attendance.length * 1 +
-        member.lateCount * -0.5 +
-        member.visitors * 5 +
-        member.oneToOnes * 2 +
-        member.tyfcb * 10;
-
-      leaderboard.push({
-        member: memberName,
-        team: team.name,
-        points,
-      });
-    }
-  }
-
-  return leaderboard.sort((a, b) => b.points - a.points);
-};
+export function initializeTeams(): TeamData {
+  return {
+    team1: {
+      name: "Team 1",
+      captain: "Himanshu Sharma",
+      members: [
+        { name: "Himanshu Sharma", stats: {}, points: 0 },
+        { name: "Prannav Khanna", stats: {}, points: 0 },
+        { name: "Paras Aneja", stats: {}, points: 0 },
+        { name: "Munish Seth", stats: {}, points: 0 },
+        { name: "Mannya Katyal", stats: {}, points: 0 },
+        { name: "Priyam Kapoor", stats: {}, points: 0 },
+        { name: "Rama Jain", stats: {}, points: 0 },
+        { name: "Sajid Hasan", stats: {}, points: 0 },
+      ],
+      totalPoints: 0,
+    },
+    team2: {
+      name: "Team 2",
+      captain: "Abhinav Gupta",
+      members: [
+        { name: "Abhinav Gupta", stats: {}, points: 0 },
+        { name: "Vijay Gupta", stats: {}, points: 0 },
+        { name: "Kulpreet Ghai", stats: {}, points: 0 },
+        { name: "Himanshu Yadav", stats: {}, points: 0 },
+        { name: "Ritu Jain", stats: {}, points: 0 },
+        { name: "Sagar Kapoor", stats: {}, points: 0 },
+        { name: "Achal Gupta", stats: {}, points: 0 },
+        { name: "Manish Jain", stats: {}, points: 0 },
+      ],
+      totalPoints: 0,
+    },
+    team3: {
+      name: "Team 3",
+      captain: "Dr. Ayushi Negi",
+      members: [
+        { name: "Dr. Ayushi Negi", stats: {}, points: 0 },
+        { name: "Praveen Wadhwa", stats: {}, points: 0 },
+        { name: "Gagan Narang", stats: {}, points: 0 },
+        { name: "Rajeev Arya", stats: {}, points: 0 },
+        { name: "Akhilesh Pandey", stats: {}, points: 0 },
+        { name: "Rajeev Nayak", stats: {}, points: 0 },
+        { name: "Sumit Singh", stats: {}, points: 0 },
+        { name: "Ayushi Negi", stats: {}, points: 0 },
+      ],
+      totalPoints: 0,
+    },
+  };
+}

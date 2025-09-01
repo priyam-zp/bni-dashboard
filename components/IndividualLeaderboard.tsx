@@ -7,12 +7,15 @@ interface IndividualLeaderboardProps {
 }
 
 const categories = [
-  { key: "total", label: "Total Points", icon: Medal },
-  { key: "attendance", label: "Attendance", icon: Calendar },
-  { key: "late", label: "Late Count", icon: Target },
-  { key: "visitors", label: "Visitors", icon: Users },
-  { key: "121", label: "1-to-1s", icon: Target },
-  { key: "tyfcb", label: "TYFCB", icon: DollarSign },
+  { key: "total", label: "Total Score", icon: Medal },
+  { key: "P", label: "Present", icon: Users },
+  { key: "A", label: "Absent", icon: Calendar },
+  { key: "L", label: "Late", icon: Calendar },
+  { key: "RGI", label: "RGI", icon: Target },
+  { key: "RGO", label: "RGO", icon: Target },
+  { key: "V", label: "Visitors", icon: Users },
+  { key: "121", label: "1-2-1", icon: Users },
+  { key: "TYFCB", label: "TYFCB", icon: DollarSign },
 ];
 
 export default function IndividualLeaderboard({
@@ -20,7 +23,6 @@ export default function IndividualLeaderboard({
 }: IndividualLeaderboardProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("total");
 
-  // ✅ Call updated teamUtils with category
   const leaderboard = getIndividualLeaderboard(
     teams,
     selectedCategory
@@ -28,24 +30,24 @@ export default function IndividualLeaderboard({
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-        <Medal className="mr-3 text-yellow-500" />
+      <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+        <Medal className="mr-2 text-yellow-500" />
         Individual Leaderboard
       </h2>
 
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Category Tabs */}
+      <div className="flex flex-wrap gap-2 mb-6">
         {categories.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition ${
-              selectedCategory === key
-                ? "bg-red-600 text-white shadow-md"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
             onClick={() => setSelectedCategory(key)}
+            className={`flex items-center px-4 py-2 rounded-lg border transition-all ${
+              selectedCategory === key
+                ? "bg-red-600 text-white border-red-600"
+                : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+            }`}
           >
-            <Icon className="mr-2 h-4 w-4" />
+            <Icon className="w-4 h-4 mr-2" />
             {label}
           </button>
         ))}
@@ -53,29 +55,27 @@ export default function IndividualLeaderboard({
 
       {/* Leaderboard Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm text-left border-collapse">
+        <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-100 text-gray-700">
-              <th className="px-4 py-2">Rank</th>
-              <th className="px-4 py-2">Member</th>
-              <th className="px-4 py-2">Team</th>
-              <th className="px-4 py-2">
-                {categories.find((c) => c.key === selectedCategory)?.label}
-              </th>
+              <th className="p-3">Rank</th>
+              <th className="p-3">Name</th>
+              <th className="p-3">Team</th>
+              <th className="p-3">Score</th>
             </tr>
           </thead>
           <tbody>
-            {leaderboard.map((row, index) => (
+            {leaderboard.map((entry, index) => (
               <tr
-                key={row.member}
-                className={`border-t ${
-                  index < 3 ? "bg-yellow-50 font-semibold" : ""
+                key={index}
+                className={`border-b ${
+                  index % 2 === 0 ? "bg-white" : "bg-gray-50"
                 }`}
               >
-                <td className="px-4 py-2">{index + 1}</td>
-                <td className="px-4 py-2">{row.member}</td>
-                <td className="px-4 py-2">{row.team}</td>
-                <td className="px-4 py-2">{row.points}</td>
+                <td className="p-3 font-bold">#{index + 1}</td>
+                <td className="p-3">{entry.name}</td>
+                <td className="p-3">{entry.team}</td>
+                <td className="p-3">{entry.score}</td>
               </tr>
             ))}
           </tbody>
@@ -84,4 +84,3 @@ export default function IndividualLeaderboard({
     </div>
   );
 }
-  
