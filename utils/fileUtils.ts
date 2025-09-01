@@ -1,222 +1,104 @@
-/**
- * File processing utilities for BNI Dashboard
- * Handles CSV parsing, Excel conversion, and data validation
- */
-
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-
-export interface FileProcessingResult {
-  success: boolean;
-  data?: any[][];
-  headers?: string[];
-  error?: string;
-  rowCount?: number;
-  columnCount?: number;
-}
-
-export interface FileValidationResult {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
-  fileType: string;
-  fileSize: number;
-}
+// utils/fileUtils.ts
+import * as XLSX from "xlsx";
+import Papa from "papaparse";
+import { TeamData, MemberData, createMember, findMemberInTeams } from "./teamUtils";
 
 /**
- * Validate uploaded file
+ * Map a CSV/Excel row into a member’s data object
  */
-export function validateFile(file: File): FileValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  
-  // Check file size (10MB limit)
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    errors.push('File size exceeds 10MB limit');
-  }
-  
-  // Check file type
-  const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-  const fileExtension = file.name.toLowerCase().split('.').pop();
-  const validExtensions = ['csv', 'xls', 'xlsx'];
-  
-  if (!validExtensions.includes(fileExtension || '')) {
-    errors.push('Invalid file type. Please upload CSV or Excel files only.');
-  }
-  
-  // Check file name
-  if (file.name.length > 255) {
-    warnings.push('File name is very long and may cause issues');
-  }
-  
-  // Check for special characters
-  const specialChars = /[<>:"/\\|?*]/;
-  if (specialChars.test(file.name)) {
-    warnings.push('File name contains special characters that may cause issues');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings,
-    fileType: fileExtension || 'unknown',
-    fileSize: file.size
-  };
+export function updateMemberFromRow(
+  member: MemberData,
+  row: any,
+  headers: string[]
+) {
+  member.present += Number(row["P"] || 0);
+  member.absent += Number(row["A"] || 0);
+  member.late += Number(row["L"] || 0);
+  member.missed += Number(row["M"] || 0);
+  member.substitutions += Number(row["S"] || 0);
+
+  member.rgi += Number(row["RGI"] || 0);
+  member.rgo += Number(row["RGO"] || 0);
+  member.rri += Number(row["RRI"] || 0);
+  member.rro += Number(row["RRO"] || 0);
+
+  member.visitors += Number(row["V"] || 0);
+  member.oneToOne += Number(row["1-2-1"] || 0);
+
+  member.tyfcb += Number(row["TYFCB"] || 0);
+  member.ceu += Number(row["CEU"] || 0);
+
+  member.total += Number(row["T"] || 0);
+
+  return member;
 }
 
 /**
- * Parse CSV file
+ * Parse CSV data into teams
  */
-export function parseCsvFile(file: File): Promise<FileProcessingResult> {
-  return new Promise((resolve) => {
-    Papa.parse(file, {
-      header: false,
-      skipEmptyLines: true,
-      delimitersToGuess: [',', '\t', '|', ';'],
-      complete: (results) => {
-        if (results.errors.length > 0) {
-          resolve({
-            success: false,
-            error: `CSV parsing error: ${results.errors[0].message}`
-          });
-          return;
-        }
-        
-        const data = results.data as string[][];
-        if (data.length === 0) {
-          resolve({ success: false, error: 'CSV file is empty' });
-          return;
-        }
-        
-        const headers = data[0];
-        const rows = data.slice(1);
-        
-        resolve({
-          success: true,
-          data: rows,
-          headers,
-          rowCount: rows.length,
-          columnCount: headers.length
-        });
-      },
-      error: (error) => {
-        resolve({ success: false, error: `Failed to parse CSV: ${error.message}` });
-      }
-    });
-  });
-}
+export function parseCSVData(csvText: string, teams: TeamData): TeamData {
+  const result = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+  if (!result.data || !Array.isArray(result.data)) return teams;
 
-/**
- * Parse Excel file
- */
-export function parseExcelFile(file: File): Promise<FileProcessingResult> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { 
-          type: 'binary',
-          cellStyles: true,
-          cellFormula: true,
-          cellDates: true
-        });
-        
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) {
-          resolve({ success: false, error: 'Excel file has no sheets' });
-          return;
-        }
-        
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-          header: 1,
-          raw: false,
-          defval: ''
-        }) as string[][];
-        
-        if (jsonData.length === 0) {
-          resolve({ success: false, error: 'Excel sheet is empty' });
-          return;
-        }
-        
-        const headers = jsonData[0];
-        const rows = jsonData.slice(1);
-        
-        resolve({
-          success: true,
-          data: rows,
-          headers,
-          rowCount: rows.length,
-          columnCount: headers.length
-        });
-        
-      } catch (error) {
-        resolve({
-          success: false,
-          error: `Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`
-        });
-      }
-    };
-    
-    reader.onerror = () => {
-      resolve({ success: false, error: 'Failed to read Excel file' });
-    };
-    
-    reader.readAsBinaryString(file);
-  });
-}
+  const updatedTeams = { ...teams };
 
-/**
- * Process uploaded file
- */
-export async function processUploadedFile(file: File): Promise<FileProcessingResult> {
-  const validation = validateFile(file);
-  if (!validation.isValid) {
-    return { success: false, error: validation.errors.join(', ') };
-  }
-  
-  try {
-    if (validation.fileType === 'csv') {
-      return await parseCsvFile(file);
-    } else if (['xls', 'xlsx'].includes(validation.fileType)) {
-      return await parseExcelFile(file);
-    } else {
-      return { success: false, error: 'Unsupported file type' };
+  result.data.forEach((row: any) => {
+    const firstName = row["First"]?.trim();
+    const lastName = row["Last"]?.trim();
+    if (!firstName || !lastName) return;
+
+    const memberName = `${firstName} ${lastName}`;
+    let found = findMemberInTeams(updatedTeams, memberName);
+
+    if (!found) {
+      // Default → put into Team A if not found
+      updatedTeams.teamA.data[memberName] = createMember(firstName, lastName);
+      found = { team: "teamA", member: memberName };
     }
-  } catch (error) {
-    return {
-      success: false,
-      error: `File processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    };
-  }
+
+    if (found) {
+      const { team, member } = found;
+      updateMemberFromRow(updatedTeams[team].data[member], row, result.meta.fields || []);
+    }
+  });
+
+  return updatedTeams;
 }
 
 /**
- * Format file size
+ * Parse Excel data into teams
  */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+export function parseExcelData(file: ArrayBuffer, teams: TeamData): TeamData {
+  const workbook = XLSX.read(file, {
+    type: "array",
+    cellDates: true,
+    cellNF: false,
+    cellText: false,
+  });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const jsonData: any[] = XLSX.utils.sheet_to_json(sheet, { defval: 0 });
 
-/**
- * Generate sample CSV
- */
-export function generateSampleCsv(): string {
-  const headers = ['Name', 'P', 'A', 'L', 'RGI', 'RGO', 'V', '1-2-1', 'TYFCB'];
-  const sampleData = [
-    ['Sajid Hasan', '4', '0', '1', '3', '2', '1', '2', '1'],
-    ['Prannav Khanna', '5', '0', '0', '2', '1', '0', '1', '0'],
-    ['Vijay Gupta', '3', '1', '1', '1', '3', '2', '1', '1'],
-    ['Himanshu Sharma', '4', '0', '0', '4', '1', '1', '3', '2'],
-    ['Abhinav Gupta', '5', '0', '0', '3', '2', '2', '2', '1']
-  ];
-  
-  return [headers, ...sampleData].map(row => row.join(',')).join('\n');
+  const updatedTeams = { ...teams };
+
+  jsonData.forEach((row: any) => {
+    const firstName = row["First"]?.trim();
+    const lastName = row["Last"]?.trim();
+    if (!firstName || !lastName) return;
+
+    const memberName = `${firstName} ${lastName}`;
+    let found = findMemberInTeams(updatedTeams, memberName);
+
+    if (!found) {
+      updatedTeams.teamA.data[memberName] = createMember(firstName, lastName);
+      found = { team: "teamA", member: memberName };
+    }
+
+    if (found) {
+      const { team, member } = found;
+      updateMemberFromRow(updatedTeams[team].data[member], row, Object.keys(row));
+    }
+  });
+
+  return updatedTeams;
 }
