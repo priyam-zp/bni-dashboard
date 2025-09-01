@@ -1,104 +1,145 @@
-// utils/fileUtils.ts
-import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import { TeamData, MemberData, createMember, findMemberInTeams } from "./teamUtils";
+import * as XLSX from "xlsx";
+import { TeamData, findMemberInTeams } from "./teamUtils";
 
-/**
- * Map a CSV/Excel row into a member’s data object
- */
-export function updateMemberFromRow(
-  member: MemberData,
+// ✅ Update a single member’s data from a row
+export const updateMemberFromRow = (
+  member: any,
   row: any,
   headers: string[]
-) {
-  member.present += Number(row["P"] || 0);
-  member.absent += Number(row["A"] || 0);
-  member.late += Number(row["L"] || 0);
-  member.missed += Number(row["M"] || 0);
-  member.substitutions += Number(row["S"] || 0);
+) => {
+  headers.forEach((header) => {
+    const value = row[header]?.toString().trim().toLowerCase();
+    if (!value) return;
 
-  member.rgi += Number(row["RGI"] || 0);
-  member.rgo += Number(row["RGO"] || 0);
-  member.rri += Number(row["RRI"] || 0);
-  member.rro += Number(row["RRO"] || 0);
-
-  member.visitors += Number(row["V"] || 0);
-  member.oneToOne += Number(row["1-2-1"] || 0);
-
-  member.tyfcb += Number(row["TYFCB"] || 0);
-  member.ceu += Number(row["CEU"] || 0);
-
-  member.total += Number(row["T"] || 0);
-
-  return member;
-}
-
-/**
- * Parse CSV data into teams
- */
-export function parseCSVData(csvText: string, teams: TeamData): TeamData {
-  const result = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-  if (!result.data || !Array.isArray(result.data)) return teams;
-
-  const updatedTeams = { ...teams };
-
-  result.data.forEach((row: any) => {
-    const firstName = row["First"]?.trim();
-    const lastName = row["Last"]?.trim();
-    if (!firstName || !lastName) return;
-
-    const memberName = `${firstName} ${lastName}`;
-    let found = findMemberInTeams(updatedTeams, memberName);
-
-    if (!found) {
-      // Default → put into Team A if not found
-      updatedTeams.teamA.data[memberName] = createMember(firstName, lastName);
-      found = { team: "teamA", member: memberName };
-    }
-
-    if (found) {
-      const { team, member } = found;
-      updateMemberFromRow(updatedTeams[team].data[member], row, result.meta.fields || []);
+    switch (header.toLowerCase()) {
+      case "member name":
+      case "participant name":
+        break;
+      case "p":
+      case "present":
+        if (value === "p" || value === "present") {
+          member.attendance.push("P");
+        }
+        break;
+      case "a":
+      case "absent":
+        if (value === "a" || value === "absent") {
+          member.attendance.push("A");
+        }
+        break;
+      case "l":
+      case "late":
+        if (value === "l" || value === "late") {
+          member.attendance.push("L");
+          member.lateCount += 1;
+        }
+        break;
+      case "visitors":
+        member.visitors += Number(value) || 0;
+        break;
+      case "1-2-1":
+      case "one-to-one":
+        member.oneToOnes += Number(value) || 0;
+        break;
+      case "tyfcb":
+        member.tyfcb += Number(value) || 0;
+        break;
+      case "rgi":
+      case "rgo":
+        member.attendance.push(value.toUpperCase());
+        break;
+      default:
+        member[header] = value;
+        break;
     }
   });
+};
 
-  return updatedTeams;
-}
+// ✅ Parse CSV data
+export const parseCSVData = (
+  file: File,
+  teams: TeamData
+): Promise<TeamData> => {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          const headers = results.meta.fields || [];
+          const updatedTeams = { ...teams };
 
-/**
- * Parse Excel data into teams
- */
-export function parseExcelData(file: ArrayBuffer, teams: TeamData): TeamData {
-  const workbook = XLSX.read(file, {
-    type: "array",
-    cellDates: true,
-    cellNF: false,
-    cellText: false,
+          results.data.forEach((row: any) => {
+            const memberName = row["Member Name"] || row["Participant Name"];
+            if (!memberName) return;
+
+            const found = findMemberInTeams(updatedTeams, memberName);
+            if (found) {
+              updateMemberFromRow(
+                updatedTeams[found.team].data[found.member],
+                row,
+                headers
+              );
+            }
+          });
+
+          resolve(updatedTeams);
+        } catch (err) {
+          reject(err);
+        }
+      },
+      error: (err) => reject(err),
+    });
   });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const jsonData: any[] = XLSX.utils.sheet_to_json(sheet, { defval: 0 });
+};
 
-  const updatedTeams = { ...teams };
+// ✅ Parse Excel data
+export const parseExcelData = async (
+  file: File,
+  teams: TeamData
+): Promise<TeamData> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-  jsonData.forEach((row: any) => {
-    const firstName = row["First"]?.trim();
-    const lastName = row["Last"]?.trim();
-    if (!firstName || !lastName) return;
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, {
+          type: "array",
+          cellStyles: true,
+          cellFormula: true, // ✅ FIXED
+          cellDates: true,
+        });
 
-    const memberName = `${firstName} ${lastName}`;
-    let found = findMemberInTeams(updatedTeams, memberName);
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-    if (!found) {
-      updatedTeams.teamA.data[memberName] = createMember(firstName, lastName);
-      found = { team: "teamA", member: memberName };
-    }
+        const headers = Object.keys(jsonData[0] || {});
+        const updatedTeams = { ...teams };
 
-    if (found) {
-      const { team, member } = found;
-      updateMemberFromRow(updatedTeams[team].data[member], row, Object.keys(row));
-    }
+        jsonData.forEach((row: any) => {
+          const memberName = row["Member Name"] || row["Participant Name"];
+          if (!memberName) return;
+
+          const found = findMemberInTeams(updatedTeams, memberName);
+          if (found) {
+            updateMemberFromRow(
+              updatedTeams[found.team].data[found.member],
+              row,
+              headers
+            );
+          }
+        });
+
+        resolve(updatedTeams);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
   });
-
-  return updatedTeams;
-}
+};

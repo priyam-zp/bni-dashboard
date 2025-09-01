@@ -1,36 +1,10 @@
-// utils/teamUtils.ts
-
 export interface MemberData {
-  firstName: string;
-  lastName: string;
-
-  // Attendance
-  present: number;
-  absent: number;
-  late: number;
-
-  // Meetings
-  missed: number;
-  substitutions: number;
-
-  // Referrals
-  rgi: number; // Referrals Given Inside
-  rgo: number; // Referrals Given Outside
-  rri: number; // Referrals Received Inside
-  rro: number; // Referrals Received Outside
-
-  // Visitors & 1-2-1
+  attendance: string[];
+  lateCount: number;
   visitors: number;
-  oneToOne: number;
-
-  // Business closed
-  tyfcb: number; // Thank You For Closed Business (₹)
-
-  // Credits
-  ceu: number; // Continuing Education Units
-
-  // Aggregate
-  total: number;
+  oneToOnes: number;
+  tyfcb: number;
+  [key: string]: any; // allow extra PALMS metrics
 }
 
 export interface Team {
@@ -42,108 +16,67 @@ export interface TeamData {
   [teamKey: string]: Team;
 }
 
-/**
- * Create a fresh member with all counters set to 0
- */
-export function createMember(firstName: string, lastName: string): MemberData {
-  return {
-    firstName,
-    lastName,
-    present: 0,
-    absent: 0,
-    late: 0,
-    missed: 0,
-    substitutions: 0,
-    rgi: 0,
-    rgo: 0,
-    rri: 0,
-    rro: 0,
-    visitors: 0,
-    oneToOne: 0,
-    tyfcb: 0,
-    ceu: 0,
-    total: 0,
-  };
-}
+export const initializeTeams = (): TeamData => ({
+  team1: { name: "Team 1", data: {} },
+  team2: { name: "Team 2", data: {} },
+  team3: { name: "Team 3", data: {} },
+  team4: { name: "Team 4", data: {} },
+});
 
-/**
- * Initialize team structure
- */
-export function initializeTeams(): TeamData {
-  return {
-    teamA: { name: "Team A", data: {} },
-    teamB: { name: "Team B", data: {} },
-    teamC: { name: "Team C", data: {} },
-  };
-}
-
-/**
- * Find a member inside teams by their name
- */
-export function findMemberInTeams(
+export const findMemberInTeams = (
   teams: TeamData,
   memberName: string
-): { team: string; member: string } | null {
+): { team: string; member: string } | null => {
   for (const teamKey of Object.keys(teams)) {
-    for (const memberKey of Object.keys(teams[teamKey].data)) {
-      if (memberKey.toLowerCase() === memberName.toLowerCase()) {
-        return { team: teamKey, member: memberKey };
-      }
+    const team = teams[teamKey];
+    if (Object.keys(team.data).includes(memberName)) {
+      return { team: teamKey, member: memberName };
     }
   }
   return null;
-}
+};
 
-/**
- * Generate team leaderboard (aggregate totals per team)
- */
-export function getTeamLeaderboard(teams: TeamData) {
-  return Object.entries(teams).map(([teamKey, team]) => {
-    const totalTyfcb = Object.values(team.data).reduce(
-      (sum, member) => sum + member.tyfcb,
-      0
-    );
-    const totalReferrals = Object.values(team.data).reduce(
-      (sum, member) => sum + member.rgi + member.rgo + member.rri + member.rro,
-      0
-    );
-    const totalVisitors = Object.values(team.data).reduce(
-      (sum, member) => sum + member.visitors,
-      0
-    );
+export const getTeamLeaderboard = (teams: TeamData) => {
+  return Object.keys(teams).map((teamKey) => {
+    const team = teams[teamKey];
+    const totalPoints = Object.values(team.data).reduce((sum, member) => {
+      return (
+        sum +
+        member.attendance.length * 1 +
+        member.lateCount * -0.5 +
+        member.visitors * 5 +
+        member.oneToOnes * 2 +
+        member.tyfcb * 10
+      );
+    }, 0);
 
     return {
       team: team.name,
-      tyfcb: totalTyfcb,
-      referrals: totalReferrals,
-      visitors: totalVisitors,
+      points: totalPoints,
     };
   });
-}
+};
 
-/**
- * Generate individual leaderboard
- */
-export function getIndividualLeaderboard(teams: TeamData) {
-  const leaderboard: {
-    name: string;
-    team: string;
-    tyfcb: number;
-    referrals: number;
-    visitors: number;
-  }[] = [];
+export const getIndividualLeaderboard = (teams: TeamData) => {
+  const leaderboard: { member: string; team: string; points: number }[] = [];
 
-  for (const [teamKey, team] of Object.entries(teams)) {
-    for (const [memberKey, member] of Object.entries(team.data)) {
+  for (const teamKey of Object.keys(teams)) {
+    const team = teams[teamKey];
+    for (const [memberName, member] of Object.entries(team.data)) {
+      const points =
+        member.attendance.length * 1 +
+        member.lateCount * -0.5 +
+        member.visitors * 5 +
+        member.oneToOnes * 2 +
+        member.tyfcb * 10;
+
       leaderboard.push({
-        name: `${member.firstName} ${member.lastName}`,
+        member: memberName,
         team: team.name,
-        tyfcb: member.tyfcb,
-        referrals: member.rgi + member.rgo + member.rri + member.rro,
-        visitors: member.visitors,
+        points,
       });
     }
   }
 
-  return leaderboard.sort((a, b) => b.tyfcb - a.tyfcb);
-}
+  return leaderboard.sort((a, b) => b.points - a.points);
+};

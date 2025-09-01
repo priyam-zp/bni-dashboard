@@ -1,110 +1,89 @@
-import React, { useRef } from "react";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import React, { useState } from "react";
 import { Upload } from "lucide-react";
 import { TeamData } from "../utils/teamUtils";
-import { updateMemberFromRow } from "../utils/fileUtils";
+import { parseCSVData, parseExcelData, updateMemberFromRow } from "../utils/fileUtils";
 
 interface FileUploadProps {
   teams: TeamData;
-  onDataUpdate: (teams: TeamData) => void;
+  onDataUpdate: (newTeams: TeamData) => void;
   onStatusUpdate: (message: string, type: "success" | "error") => void;
 }
 
-export default function FileUpload({ teams, onDataUpdate, onStatusUpdate }: FileUploadProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+const FileUpload: React.FC<FileUploadProps> = ({ teams, onDataUpdate, onStatusUpdate }) => {
+  const [loading, setLoading] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const fileName = file.name.toLowerCase();
+    setLoading(true);
 
     try {
-      if (fileName.endsWith(".csv")) {
-        parseCSV(file);
-      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-        parseExcel(file);
+      let updatedTeams: TeamData = { ...teams };
+
+      if (file.name.endsWith(".csv")) {
+        updatedTeams = await parseCSVData(file, updatedTeams);
+      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        updatedTeams = await parseExcelData(file, updatedTeams);
       } else {
-        onStatusUpdate("❌ Unsupported file format. Please upload CSV or Excel.", "error");
+        throw new Error("Unsupported file format. Please upload a CSV or Excel file.");
       }
-    } catch (err) {
-      console.error(err);
-      onStatusUpdate("❌ Error processing file", "error");
+
+      onDataUpdate(updatedTeams);
+      onStatusUpdate("✅ Data uploaded and processed successfully!", "success");
+    } catch (error: any) {
+      console.error("File processing error:", error);
+      onStatusUpdate(`❌ Error processing file: ${error.message}`, "error");
+    } finally {
+      setLoading(false);
+      event.target.value = "";
     }
   };
 
-  const parseCSV = (file: File) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results: Papa.ParseResult<any>) => {
-        processRows(results.data);
-      },
-      error: (err) => {
-        console.error(err);
-        onStatusUpdate("❌ Failed to parse CSV", "error");
-      }
-    });
-  };
-
-  const parseExcel = async (file: File) => {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-    processRows(jsonData);
-  };
-
-  const processRows = (rows: any[]) => {
-    const updatedTeams = { ...teams };
-
-    rows.forEach((row) => {
-      const first = row["First"]?.toString().trim();
-      const last = row["Last"]?.toString().trim();
-      const memberName = [first, last].filter(Boolean).join(" ").trim();
-
-      if (!memberName) return; // skip empty rows
-
-      // Find the member inside teams
-      let foundTeamKey: string | null = null;
-      let foundMember: string | null = null;
-
-      Object.keys(updatedTeams).forEach((teamKey) => {
-        if (updatedTeams[teamKey].members.includes(memberName)) {
-          foundTeamKey = teamKey;
-          foundMember = memberName;
-        }
-      });
-
-      if (foundTeamKey && foundMember) {
-        updateMemberFromRow(updatedTeams[foundTeamKey].data[foundMember], row, Object.keys(row));
-      } else {
-        console.warn(`⚠️ Member "${memberName}" not found in any team.`);
-      }
-    });
-
-    onDataUpdate(updatedTeams);
-    onStatusUpdate("✅ File uploaded and processed successfully", "success");
-  };
-
   return (
-    <div>
-      <input
-        type="file"
-        accept=".csv,.xlsx,.xls"
-        onChange={handleFileUpload}
-        ref={fileInputRef}
-        className="hidden"
-      />
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 flex items-center"
-      >
-        <Upload className="mr-2" />
-        Upload File
-      </button>
+    <div className="space-y-6">
+      {/* File input */}
+      <div className="flex flex-col items-center">
+        <label
+          htmlFor="file-upload"
+          className="cursor-pointer bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 transform hover:-translate-y-1 flex items-center space-x-2"
+        >
+          <Upload size={20} />
+          <span>{loading ? "Processing..." : "Upload CSV / Excel File"}</span>
+        </label>
+        <input
+          id="file-upload"
+          type="file"
+          accept=".csv, .xlsx, .xls"
+          className="hidden"
+          onChange={handleFileUpload}
+          disabled={loading}
+        />
+      </div>
+
+      {/* Supported formats */}
+      <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">📋 Supported File Formats</h3>
+        <ul className="text-gray-700 space-y-1 list-disc list-inside">
+          <li><strong>CSV</strong>: Comma-separated values with headers</li>
+          <li><strong>Excel</strong>: .xlsx and .xls files (first sheet will be processed)</li>
+          <li><strong>Required columns</strong>: Member Name / Participant Name</li>
+          <li><strong>Recognized data</strong>:  
+            <ul className="list-disc list-inside ml-6">
+              <li>P / Present</li>
+              <li>A / Absent</li>
+              <li>L / Late</li>
+              <li>RGI / RGO</li>
+              <li>Visitors</li>
+              <li>1-2-1 Meetings</li>
+              <li>TYFCB (Thank You for Closed Business)</li>
+              <li>Other PALMS metrics</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
     </div>
   );
-}
+};
+
+export default FileUpload;
